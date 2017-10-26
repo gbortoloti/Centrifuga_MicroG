@@ -1,6 +1,6 @@
 //Integração dos Codigos do Wagner (Relé e controle)
 
-#include <Arduino.h>
+//#include <Arduino.h>
 #include <sensor_Temp.h>
 #include <ESP8266WiFi.h>
 #include <WiFiClient.h>
@@ -30,14 +30,44 @@ float ldrLux;
 float ldrResistance;
 
 
-const char* rede = "BOLSONARO2018.";
-const char* senha = "faymicrog";
+const char* rede = "microg";
+const char* senha = "senhamicrog";
 String apiKey = "HIUE1DNTL6744VTI";
 const char* server = "api.thingspeak.com";
 
 WiFiClient client;
 RHT03 rht;
 ESP8266WebServer server2 ( 80 );
+
+//pino rele
+const int pinorele =  8;  //Verificar se essa porta está disponivel
+
+//receptor infravermelho TSOP
+int RECV_PIN = 11;        //Verificar se essa porta está disponivel
+IRrecv irrecv(RECV_PIN);
+decode_results results;
+
+
+//LCD 16x2
+unsigned char buffer =0;
+#define pino_rs_0    bitClear(buffer,4)
+#define pino_rs_1    bitSet(buffer,4)
+#define pino_e_0     bitClear(buffer,5)
+#define pino_e_1     bitSet(buffer,5)
+
+#define cursor_on    0x0c
+#define cursor_off   0x0e
+#define cursor_blink 0x0f
+
+void lcd_send4bits(unsigned char com);            //Função que envia um comando de 4 bits(1 nibble) ao LCD.
+void lcd_wrcom4(unsigned char com);               //Função que envia um 4 bits(1 nibble) ao LCD, chama a função send4bits.
+void lcd_wrcom(unsigned char com);                //Função que envia um commando ao lcd.
+void lcd_wrchar(unsigned char ch);                //Função que envia um dado para o lcd.
+void lcd_init(unsigned char estado_cursor);        //Função que inicializa o lcd.
+void lcd_goto(unsigned char x, unsigned char y);  //Função que desloca o cursor do lcd em uma posiçao do lcd.
+void lcd_clear (void);                            //Função que limpa o lcd.
+void pcf_wr(unsigned char dat);
+int lcd_putc( char c, FILE * );
 
 String getPage()
 {
@@ -111,42 +141,50 @@ void handleRoot()
 
 
 void setup()
- {
-  Serial.begin(9600);
-  delay(10);
+{
+   Wire.begin();
+   Serial.begin(9600);
+   irrecv.enableIRIn();
+   while(!Serial);
+  // fdevopen( &lcd_putc, NULL );
+   lcd_init(0x0c);
+   lcd_goto(5,1);
+   printf("MICROG");
+   pinMode(pinorele, OUTPUT);
+   delay(10);
 
-  pinMode(LEDPIN, OUTPUT);
-  digitalWrite(LEDPIN, LOW);
+   pinMode(LEDPIN, OUTPUT);
+   digitalWrite(LEDPIN, LOW);
 
-  Serial.println();
-  Serial.println();
-  Serial.println("Conectando-se a");
-  Serial.print(rede);
-  Serial.println();
+   Serial.println();
+   Serial.println();
+   Serial.println("Conectando-se a");
+   Serial.print(rede);
+   Serial.println();
 
-  WiFi.begin(rede, senha);
+   WiFi.begin(rede, senha);
 
-  while(WiFi.status() != WL_CONNECTED)
-  {
-    delay(1000);
-    Serial.print(".");
-  }
+   while(WiFi.status() != WL_CONNECTED)
+    {
+      delay(1000);
+      Serial.print(".");
+    }
 
-  Serial.println("");
-  Serial.println("WiFi Conectado!");
-  //Server.begin();
+   Serial.println("");
+   Serial.println("WiFi Conectado!");
+   //Server.begin();
 
-  Serial.print("Use esse URL para conectar: ");
-  Serial.print("http://");
-  Serial.print(WiFi.localIP());
-  Serial.print("/");
+   Serial.print("Use esse URL para conectar: ");
+   Serial.print("http://");
+   Serial.print(WiFi.localIP());
+   Serial.print("/");
 
-  server2.on ( "/", handleRoot );
+   server2.on ( "/", handleRoot );
 
-  server2.begin();
-  Serial.println ( "HTTP server started" );
+   server2.begin();
+   Serial.println ( "HTTP server started" );
 
-  rht.begin(RHT03_DATA_IN, RHT03_DATA_OUT);
+   rht.begin(RHT03_DATA_IN, RHT03_DATA_OUT);
 }
 
 void loop()
@@ -208,7 +246,171 @@ void loop()
     delay(RHT_READ_INTERVAL_MS);
   }
 
+  if (irrecv.decode(&results)) {
+       Serial.println();
+
+           switch(results.value)
+           {
+             case 16756815:
+               lcd_clear();
+               digitalWrite(pinorele, HIGH);
+               Serial.print("Liga");
+               printf("Liga");
+             break;
+
+             case 16775175:
+               lcd_clear();
+               digitalWrite(pinorele, LOW);
+               Serial.print("Desliga");
+               printf("Desliga");
+             break;
+
+             case 16748655:
+               lcd_clear();
+               Serial.print("Mais");
+               printf("Mais");
+             break;
+
+             case 16758855:
+               lcd_clear();
+               Serial.print("Menos");
+               printf("Menos");
+             break;
+
+             case 16767015:
+               lcd_clear();
+               Serial.print("Enter");
+               printf("Enter");
+             break;
+
+             case 16746615:
+               lcd_clear();
+               lcd_goto(0,0);
+             break;
+
+             case 16754775:
+                 for (int i=0; i<100; i++) {
+                 Serial.print("\n");}
+                 lcd_clear();
+             break;
+
+             default:
+               lcd_clear();
+               Serial.print("Unknown");
+               printf("Unknown");
+             break;
+            }
+           delay(200);
+           irrecv.resume();
+           Serial.println();
+ }
+
   client.stop();
 
   delay(1000);
+}
+
+int lcd_putc( char c, FILE * )
+{
+  lcd_wrchar( c );
+  return 0;
+}
+
+void pcf_wr(unsigned char dat)
+{
+    Wire.beginTransmission(0x38);
+    Wire.write(dat);
+    Wire.endTransmission();
+}
+
+
+void lcd_send4bits(unsigned char dat)
+{
+  // D4 0 - D5 1 - D6 2 - D7 3
+  buffer=buffer&0xf0;
+  buffer=buffer+(dat&0x0f);
+  pcf_wr(buffer);
+}
+
+void lcd_wrcom4(unsigned char com)
+{
+  lcd_send4bits(com);
+  pino_rs_0;
+  pcf_wr(buffer);
+  pino_e_1;
+  pcf_wr(buffer);
+  delayMicroseconds(5);
+  pino_e_0;
+  pcf_wr(buffer);
+  delay(5);
+}
+
+void lcd_wrcom(unsigned char com)
+{
+  lcd_send4bits(com/0x10); // D7...D4
+  pino_rs_0;
+  pcf_wr(buffer);
+  pino_e_1;
+  pcf_wr(buffer);
+  delayMicroseconds(5);
+  pino_e_0;
+  pcf_wr(buffer);
+  delayMicroseconds(5);
+
+  lcd_send4bits(com%0x10); // D3...D0
+  pino_e_1;
+  pcf_wr(buffer);
+  delayMicroseconds(5);
+  pino_e_0;
+  pcf_wr(buffer);
+  delay(5);
+}
+
+void lcd_wrchar(unsigned char ch)
+{
+  lcd_send4bits(ch/0x10); // D7...D4
+  pino_rs_1;
+  pcf_wr(buffer);
+  pino_e_1;
+  pcf_wr(buffer);
+  delayMicroseconds(5);
+  pino_e_0;
+  pcf_wr(buffer);
+  delayMicroseconds(5);
+
+  lcd_send4bits(ch%0x10); // D3...D0
+  pino_e_1;
+  pcf_wr(buffer);
+  delayMicroseconds(5);
+  pino_e_0;
+  pcf_wr(buffer);
+  delay(5);
+}
+
+void lcd_init(unsigned char estado_cursor)
+{
+  lcd_wrcom4(3);
+  lcd_wrcom4(3);
+  lcd_wrcom4(3);
+  lcd_wrcom4(2);
+  lcd_wrcom(0x28);
+  lcd_wrcom(estado_cursor);
+  lcd_wrcom(0x06);
+  lcd_wrcom(0x01);
+}
+
+void lcd_goto(unsigned char x, unsigned char y)
+{
+  if(x<16)
+  {
+    if(y==0) lcd_wrcom(0x80+x);
+    if(y==1) lcd_wrcom(0xc0+x);
+    if(y==2) lcd_wrcom(0x90+x);
+    if(y==3) lcd_wrcom(0xd0+x);
+  }
+}
+
+void lcd_clear (void)
+{
+    lcd_wrcom(0x01);
 }
