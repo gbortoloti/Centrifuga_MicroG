@@ -8,4 +8,4 @@ Descrição dos arquivos e diretórios.
 
 	2 - src: Pasta Source, onde encontra-se a main.cpp. 
 
-	3 - platformio.ini: Arquivo de configuração da placa.
+	3 - platformio.ini: Arquivo de configuração e inicialização da placa.
