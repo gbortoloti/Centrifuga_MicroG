@@ -1,12 +1,12 @@
 //Integração dos Codigos do Wagner (Relé e controle)
 
-//#include <Arduino.h>
+#include <Arduino.h>
 #include <sensor_Temp.h>
 #include <ESP8266WiFi.h>
 #include <WiFiClient.h>
 #include <ESP8266WebServer.h>
 #include <Wire.h>
-#include <IRremote.h>
+#include <IRremoteESP8266.h>
 
 const int LEDPIN = 15; //Porta D10 na placa
 String  estadoLed = "OFF";
@@ -146,7 +146,7 @@ void setup()
    Serial.begin(9600);
    irrecv.enableIRIn();
    while(!Serial);
-  // fdevopen( &lcd_putc, NULL );
+   fdevopen( &lcd_putc, NULL );
    lcd_init(0x0c);
    lcd_goto(5,1);
    printf("MICROG");
