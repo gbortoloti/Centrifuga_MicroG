@@ -7,6 +7,8 @@
 #include <ESP8266WebServer.h>
 #include <Wire.h>
 #include <IRremoteESP8266.h>
+#include <IRrecv.h>
+#include <IRutils.h>
 
 const int LEDPIN = 15; //Porta D10 na placa
 String  estadoLed = "OFF";
@@ -146,7 +148,7 @@ void setup()
    Serial.begin(9600);
    irrecv.enableIRIn();
    while(!Serial);
-   fdevopen( &lcd_putc, NULL );
+   //fdevopen( &lcd_putc, NULL );
    lcd_init(0x0c);
    lcd_goto(5,1);
    printf("MICROG");
