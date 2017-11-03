@@ -1,5 +1,4 @@
 //Integração dos Codigos do Wagner (Relé e controle)
-
 #include <Arduino.h>
 #include <sensor_Temp.h>
 #include <ESP8266WiFi.h>
@@ -10,6 +9,7 @@
 #include <IRrecv.h>
 #include <IRutils.h>
 
+//LED teste para acionamento de cargas pela web
 const int LEDPIN = 15; //Porta D10 na placa
 String  estadoLed = "OFF";
 
@@ -31,7 +31,7 @@ float resistorVoltage, ldrVoltage;
 float ldrLux;
 float ldrResistance;
 
-
+//Configuração de rede e data base
 const char* rede = "microg";
 const char* senha = "senhamicrog";
 String apiKey = "HIUE1DNTL6744VTI";
@@ -42,10 +42,11 @@ RHT03 rht;
 ESP8266WebServer server2 ( 80 );
 
 //pino rele
-const int pinorele =  8;  //Verificar se essa porta está disponivel
+const int pinorele =  2;  //Porta D9 da placa
 
 //receptor infravermelho TSOP
-int RECV_PIN = 11;        //Verificar se essa porta está disponivel
+const int RECV_PIN = 13; //Porta D11 da placa
+
 IRrecv irrecv(RECV_PIN);
 decode_results results;
 
@@ -61,6 +62,7 @@ unsigned char buffer =0;
 #define cursor_off   0x0e
 #define cursor_blink 0x0f
 
+//Prototipos das funções do display LCD
 void lcd_send4bits(unsigned char com);            //Função que envia um comando de 4 bits(1 nibble) ao LCD.
 void lcd_wrcom4(unsigned char com);               //Função que envia um 4 bits(1 nibble) ao LCD, chama a função send4bits.
 void lcd_wrcom(unsigned char com);                //Função que envia um commando ao lcd.
@@ -71,75 +73,10 @@ void lcd_clear (void);                            //Função que limpa o lcd.
 void pcf_wr(unsigned char dat);
 int lcd_putc( char c, FILE * );
 
-String getPage()
-{
-  String page = "<html lang=pt-BR><head><meta http-equiv='refresh' content='10'/>";
-  page += "<title>ESP8266 Demo - www.projetsdiy.fr</title>";
-  page += "<style> body { background-color: #fffff; font-family: Arial, Helvetica, Sans-Serif; Color: #000088; }</style>";
-  page += "</head><body><h1>ESP8266 Demo</h1>";
-  page += "<h3>RHT03</h3>";
-  page += "<ul><li>Temperatura: ";
-  page += latestTempC;
-  page += " graus Celsius</li>";
-  page += "<li>Umidade: ";
-  page += latestHumidity;
-  page += "%</li>";
-  page +="<h3>LDR</h3>";
-  page += "<li>Luminosidade: ";
-  page += ldrLux;
-  page += "Lux</li>";
-  page += "<h3>Acionamento da Carga</h3>";
-  page += "<form action='/' method='POST'>";
-  page += "<ul><li>CARGA (Estado: ";
-  page += estadoLed;
-  page += ")";
-  page += "<INPUT type='radio' name='LED' value='1'>ON";
-  page += "<INPUT type='radio' name='LED' value='0'>OFF</li></ul>";
-  page += "<INPUT type='submit' value='Atualizar'>";
-  page += "</body></html>";
-  return page;
-}
-
-void handleSubmit()
-{
-  // Update GPIO
-  String LEDValue;
-  LEDValue = server2.arg("LED");
-  //Serial.println("Set GPIO "); Serial.print(LEDValue);
-
-  if ( LEDValue == "1" )
-  {
-    //digitalWrite(LEDPIN, 1);
-    digitalWrite(LEDPIN, HIGH);
-    estadoLed = "On";
-    server2.send ( 200, "text/html", getPage() );
-  }
-
-  else if ( LEDValue == "0" )
-  {
-    //digitalWrite(LEDPIN, 0);
-    digitalWrite(LEDPIN, LOW);
-    estadoLed = "Off";
-    server2.send ( 200, "text/html", getPage());
-  }
-
-  else
-  {
-    Serial.println("Err Led Value");
-  }
-}
-
-void handleRoot()
-{
-  if ( server2.hasArg("LED"))
-  {
-    handleSubmit();
-  }
-  else
-  {
-    server2.send ( 200, "text/html", getPage() );
-  }
-}
+//Prototipos das funções da web page
+String getPage();
+void handleSubmit();
+void handleRoot();
 
 
 void setup()
@@ -153,6 +90,7 @@ void setup()
    lcd_goto(5,1);
    printf("MICROG");
    pinMode(pinorele, OUTPUT);
+   digitalWrite(pinorele, LOW);
    delay(10);
 
    pinMode(LEDPIN, OUTPUT);
@@ -174,7 +112,6 @@ void setup()
 
    Serial.println("");
    Serial.println("WiFi Conectado!");
-   //Server.begin();
 
    Serial.print("Use esse URL para conectar: ");
    Serial.print("http://");
@@ -256,15 +193,19 @@ void loop()
              case 16756815:
                lcd_clear();
                digitalWrite(pinorele, HIGH);
-               Serial.print("Liga");
-               printf("Liga");
+               estadoLed = "On";
+               Serial.println("Liga");
+              printf("Liga");
+               //irrecv.resume();
              break;
 
              case 16775175:
                lcd_clear();
                digitalWrite(pinorele, LOW);
+               estadoLed = "Off";
                Serial.print("Desliga");
                printf("Desliga");
+               //irrecv.resume();
              break;
 
              case 16748655:
@@ -300,6 +241,7 @@ void loop()
                lcd_clear();
                Serial.print("Unknown");
                printf("Unknown");
+               //irrecv.resume();
              break;
             }
            delay(200);
@@ -312,6 +254,7 @@ void loop()
   delay(1000);
 }
 
+//Funções para o funcionamento do display LCD
 int lcd_putc( char c, FILE * )
 {
   lcd_wrchar( c );
@@ -415,4 +358,77 @@ void lcd_goto(unsigned char x, unsigned char y)
 void lcd_clear (void)
 {
     lcd_wrcom(0x01);
+}
+
+//WEB
+String getPage()
+{
+  String page = "<html lang=pt-BR><head><meta http-equiv='refresh' content='10'/>";
+  page += "<title>Centrifuga MicroG</title>";
+  page += "<style> body { background-color: #fffff; font-family: Arial, Helvetica, Sans-Serif; Color: #000088; }</style>";
+  page += "</head><body><h1>Centrifuga MicroG</h1>";
+  page += "<h3>RHT03</h3>";
+  page += "<ul><li>Temperatura: ";
+  page += latestTempC;
+  page += " graus Celsius</li>";
+  page += "<li>Umidade: ";
+  page += latestHumidity;
+  page += "%</li>";
+  page +="<h3>LDR</h3>";
+  page += "<li>Luminosidade: ";
+  page += ldrLux;
+  page += "Lux</li>";
+  page += "<h3>Acionamento da Carga</h3>";
+  page += "<form action='/' method='POST'>";
+  page += "<ul><li>CARGA (Estado: ";
+  page += estadoLed;
+  page += ")";
+  page += "<INPUT type='radio' name='LED' value='1'>ON";
+  page += "<INPUT type='radio' name='LED' value='0'>OFF</li></ul>";
+  page += "<INPUT type='submit' value='Atualizar'>";
+  page += "</body></html>";
+  return page;
+}
+
+void handleSubmit()
+{
+  // Update GPIO
+  String LEDValue;
+  LEDValue = server2.arg("LED");
+  //Serial.println("Set GPIO "); Serial.print(LEDValue);
+
+  if ( LEDValue == "1" )
+  {
+    //digitalWrite(LEDPIN, 1);
+    digitalWrite(LEDPIN, HIGH);
+    digitalWrite(pinorele, HIGH);
+    estadoLed = "On";
+    server2.send ( 200, "text/html", getPage() );
+  }
+
+  else if ( LEDValue == "0" )
+  {
+    //digitalWrite(LEDPIN, 0);
+    digitalWrite(LEDPIN, LOW);
+    digitalWrite(pinorele, LOW);
+    estadoLed = "Off";
+    server2.send ( 200, "text/html", getPage());
+  }
+
+  else
+  {
+    Serial.println("Err Led Value");
+  }
+}
+
+void handleRoot()
+{
+  if ( server2.hasArg("LED"))
+  {
+    handleSubmit();
+  }
+  else
+  {
+    server2.send ( 200, "text/html", getPage() );
+  }
 }
